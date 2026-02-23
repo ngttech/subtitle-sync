@@ -65,15 +65,18 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
     if provider == "openai":
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key)
-        resp = await client.chat.completions.create(
+        kwargs = dict(
             model=model,
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content},
             ],
             max_completion_tokens=max_tokens,
-            temperature=0.3,
         )
+        # GPT-5 family (reasoning models) does not support temperature
+        if not model.startswith("gpt-5"):
+            kwargs["temperature"] = 0.3
+        resp = await client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content or ""
     else:
         from anthropic import AsyncAnthropic
