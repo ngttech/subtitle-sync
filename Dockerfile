@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q https://github.com/kaegi/alass/releases/download/v2.1.0/alass-linux64 \
+RUN wget -q https://github.com/kaegi/alass/releases/download/v2.0.0/alass-linux64 \
     -O /usr/local/bin/alass-cli && chmod +x /usr/local/bin/alass-cli
 
 WORKDIR /app
