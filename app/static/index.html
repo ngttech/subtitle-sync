@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subtitle Sync</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <nav class="container-fluid">
+        <ul>
+            <li><strong><a href="#/" class="nav-brand">Subtitle Sync</a></strong></li>
+        </ul>
+        <ul>
+            <li><a href="#/" data-nav="dashboard">Dashboard</a></li>
+            <li><a href="#/movies" data-nav="movies">Movies</a></li>
+            <li><a href="#/shows" data-nav="shows">TV Shows</a></li>
+            <li><a href="#/settings" data-nav="settings">Settings</a></li>
+        </ul>
+    </nav>
+
+    <main class="container" id="app">
+        <p aria-busy="true">Loading...</p>
+    </main>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/pages/dashboard.js"></script>
+    <script src="/static/js/pages/settings.js"></script>
+    <script src="/static/js/pages/movies.js"></script>
+    <script src="/static/js/pages/movie.js"></script>
+    <script src="/static/js/pages/shows.js"></script>
+    <script src="/static/js/pages/episodes.js"></script>
+    <script src="/static/js/pages/episode.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

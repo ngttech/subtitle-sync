@@ -1,0 +1,173 @@
+/* Subtitle Sync — Custom styles */
+
+.nav-brand {
+    text-decoration: none;
+}
+
+nav a[data-nav].active {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.search-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.search-bar input {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.search-bar button {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+table {
+    width: 100%;
+}
+
+table tbody tr {
+    cursor: pointer;
+}
+
+table tbody tr:hover {
+    opacity: 0.8;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.status-badge.ok {
+    background: #2d6a4f;
+    color: #d8f3dc;
+}
+
+.status-badge.error {
+    background: #9d0208;
+    color: #ffd6d6;
+}
+
+.track-list {
+    margin: 1rem 0;
+}
+
+.track-item {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.track-item.selected {
+    border-color: var(--pico-primary);
+    background: var(--pico-primary-focus);
+}
+
+.track-item .track-info {
+    flex: 1;
+}
+
+.track-item label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+.pgs-warning {
+    background: #7f5539;
+    color: #fefae0;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.sync-result {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 4px;
+}
+
+.sync-result.success {
+    background: #1b4332;
+    color: #d8f3dc;
+}
+
+.sync-result.error {
+    background: #641220;
+    color: #ffd6d6;
+}
+
+.path-mapping-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.path-mapping-row input {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.path-mapping-row button {
+    margin-bottom: 0;
+    padding: 0.4rem 0.75rem;
+}
+
+.file-path {
+    font-family: monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+    opacity: 0.8;
+}
+
+.season-group {
+    margin-bottom: 1.5rem;
+}
+
+.season-group h3 {
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding-bottom: 0.25rem;
+}
+
+.section-label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.sub-source-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.sub-source-tabs button {
+    margin-bottom: 0;
+}
+
+.sub-source-tabs button.active {
+    background: var(--pico-primary);
+    color: var(--pico-primary-inverse);
+}
+
+.sub-source-tabs button:not(.active) {
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-color);
+}
+
+.hidden {
+    display: none !important;
+}

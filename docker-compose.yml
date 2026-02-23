@@ -1,0 +1,14 @@
+services:
+  subtitle-sync:
+    build: .
+    container_name: subtitle-sync
+    ports:
+      - "8765:8765"
+    volumes:
+      - ./config:/app/config          # Persistent settings
+      - /path/to/movies:/movies       # Same mount as Radarr
+      - /path/to/tv:/tv               # Same mount as Sonarr
+    environment:
+      - SUBTITLE_SYNC_CONFIG_DIR=/app/config
+      - SUBTITLE_SYNC_DATA_DIR=/app/data
+    restart: unless-stopped
