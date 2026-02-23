@@ -1,4 +1,4 @@
-// Settings page — configure Radarr/Sonarr, path mappings, test connections
+// Settings page — configure Radarr/Sonarr, path mappings, AI translation, test connections
 async function SettingsPage(container) {
     container.innerHTML = '<h2>Settings</h2><article aria-busy="true">Loading settings...</article>';
 
@@ -46,6 +46,24 @@ async function SettingsPage(container) {
                     ${mappings.map((m, i) => pathMappingRow(i, m.from_path, m.to_path)).join("")}
                 </div>
                 <button type="button" id="add-mapping" class="outline secondary">+ Add Mapping</button>
+            </article>
+
+            <article>
+                <header><strong>AI Translation</strong></header>
+                <p><small>Configure an AI provider to enable subtitle translation (embedded track to external file).</small></p>
+                <label>AI Provider
+                    <select name="ai_provider">
+                        <option value="" ${!settings.ai_provider ? 'selected' : ''}>None</option>
+                        <option value="openai" ${settings.ai_provider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                        <option value="anthropic" ${settings.ai_provider === 'anthropic' ? 'selected' : ''}>Anthropic (Claude)</option>
+                    </select>
+                </label>
+                <label>OpenAI API Key
+                    <input type="password" name="openai_api_key" value="" placeholder="${settings.openai_api_key_set ? '(saved — leave blank to keep)' : 'Enter OpenAI API key'}">
+                </label>
+                <label>Anthropic API Key
+                    <input type="password" name="anthropic_api_key" value="" placeholder="${settings.anthropic_api_key_set ? '(saved — leave blank to keep)' : 'Enter Anthropic API key'}">
+                </label>
             </article>
 
             <article>
@@ -138,6 +156,9 @@ async function SettingsPage(container) {
                 sonarr_url: form.sonarr_url.value,
                 sonarr_api_key: form.sonarr_api_key.value,
                 path_mappings,
+                ai_provider: form.ai_provider.value,
+                openai_api_key: form.openai_api_key.value,
+                anthropic_api_key: form.anthropic_api_key.value,
             });
             el.textContent = "Settings saved!";
         } catch (err) {

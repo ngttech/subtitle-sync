@@ -44,6 +44,12 @@ async function EpisodePage(container, episodeId) {
                         <option value="sub-to-audio">Sub-to-Audio (fallback)</option>
                     </select>
                 </label>
+                <label>Sync Engine
+                    <select id="sync-engine">
+                        <option value="ffsubsync">ffsubsync</option>
+                        <option value="alass">alass (faster, cross-language)</option>
+                    </select>
+                </label>
                 <label>Output Language Tag
                     <input type="text" id="output-lang" placeholder="e.g. es, pt" value="">
                 </label>
@@ -59,7 +65,12 @@ async function EpisodePage(container, episodeId) {
     let tracks = [];
     try {
         tracks = await API.get(`/episodes/${episodeId}/tracks`);
-        renderTracks(document.getElementById("tracks-area"), tracks);
+        renderTracks(document.getElementById("tracks-area"), tracks, episode.file_path, async () => {
+            try {
+                const subs = await API.get(`/episodes/${episodeId}/external-subs`);
+                renderExternalSubs(document.getElementById("folder-subs-area"), subs);
+            } catch (_) {}
+        });
     } catch (err) {
         document.getElementById("tracks-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
@@ -96,6 +107,7 @@ async function EpisodePage(container, episodeId) {
         const selectedSub = document.querySelector('input[name="ext-sub"]:checked');
         const uploadedFile = document.getElementById("sub-upload").files[0];
         const syncMode = document.getElementById("sync-mode").value;
+        const syncEngine = document.getElementById("sync-engine").value;
         const outputLang = document.getElementById("output-lang").value;
 
         if (syncMode === "sub-to-sub" && !selectedTrack) {
@@ -114,6 +126,7 @@ async function EpisodePage(container, episodeId) {
         const formData = new FormData();
         formData.append("video_path", episode.file_path);
         formData.append("sync_mode", syncMode);
+        formData.append("sync_engine", syncEngine);
         formData.append("output_language", outputLang);
 
         if (selectedTrack) {

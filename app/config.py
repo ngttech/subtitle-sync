@@ -15,6 +15,9 @@ class Settings(BaseModel):
     sonarr_url: str = ""
     sonarr_api_key: str = ""
     path_mappings: list[PathMapping] = []
+    ai_provider: str = ""  # "openai" or "anthropic" (empty = not configured)
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
 
     def apply_path_mapping(self, path: str) -> str:
         for mapping in self.path_mappings:

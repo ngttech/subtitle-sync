@@ -18,6 +18,7 @@ async def run_sync(
     external_sub_path: str | None = Form(default=None),
     sync_mode: str = Form(default="sub-to-sub"),
     output_language: str = Form(default=""),
+    sync_engine: str = Form(default="ffsubsync"),
     uploaded_sub: UploadFile | None = File(default=None),
 ):
     if not Path(video_path).exists():
@@ -40,6 +41,9 @@ async def run_sync(
     if not Path(sub_path).exists():
         raise HTTPException(status_code=400, detail=f"Subtitle file not found: {sub_path}")
 
+    if sync_engine not in ("ffsubsync", "alass"):
+        raise HTTPException(status_code=400, detail=f"Unknown sync engine: {sync_engine}")
+
     ref_temp_path: str | None = None
 
     try:
@@ -52,11 +56,11 @@ async def run_sync(
             # Extract the reference subtitle track
             ref_temp_path = await extract_subtitle(video_path, reference_track_index)
             success, message, output_path, offset_ms = await sync_sub_to_sub(
-                video_path, ref_temp_path, sub_path, output_language,
+                video_path, ref_temp_path, sub_path, output_language, sync_engine,
             )
         elif sync_mode == "sub-to-audio":
             success, message, output_path, offset_ms = await sync_sub_to_audio(
-                video_path, sub_path, output_language,
+                video_path, sub_path, output_language, sync_engine,
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown sync mode: {sync_mode}")

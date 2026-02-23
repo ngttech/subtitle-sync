@@ -30,3 +30,9 @@ class SyncResponse(BaseModel):
     message: str
     output_path: str = ""
     offset_ms: float = 0
+
+
+class TranslateResponse(BaseModel):
+    success: bool
+    message: str
+    output_path: str = ""

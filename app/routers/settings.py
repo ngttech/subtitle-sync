@@ -27,6 +27,9 @@ async def get_settings():
             PathMappingModel(from_path=m.from_path, to_path=m.to_path)
             for m in s.path_mappings
         ],
+        ai_provider=s.ai_provider,
+        openai_api_key_set=bool(s.openai_api_key),
+        anthropic_api_key_set=bool(s.anthropic_api_key),
     )
 
 
@@ -36,6 +39,8 @@ async def update_settings(req: SettingsRequest):
 
     radarr_key = req.radarr_api_key if req.radarr_api_key else current.radarr_api_key
     sonarr_key = req.sonarr_api_key if req.sonarr_api_key else current.sonarr_api_key
+    openai_key = req.openai_api_key if req.openai_api_key else current.openai_api_key
+    anthropic_key = req.anthropic_api_key if req.anthropic_api_key else current.anthropic_api_key
 
     new_settings = Settings(
         radarr_url=req.radarr_url,
@@ -46,6 +51,9 @@ async def update_settings(req: SettingsRequest):
             PathMapping(from_path=m.from_path, to_path=m.to_path)
             for m in req.path_mappings
         ],
+        ai_provider=req.ai_provider,
+        openai_api_key=openai_key,
+        anthropic_api_key=anthropic_key,
     )
     save_settings(new_settings)
 
@@ -61,6 +69,9 @@ async def update_settings(req: SettingsRequest):
             PathMappingModel(from_path=m.from_path, to_path=m.to_path)
             for m in new_settings.path_mappings
         ],
+        ai_provider=new_settings.ai_provider,
+        openai_api_key_set=bool(new_settings.openai_api_key),
+        anthropic_api_key_set=bool(new_settings.anthropic_api_key),
     )
 
 

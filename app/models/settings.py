@@ -12,6 +12,9 @@ class SettingsRequest(BaseModel):
     sonarr_url: str = ""
     sonarr_api_key: str = ""
     path_mappings: list[PathMappingModel] = []
+    ai_provider: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
 
 
 class SettingsResponse(BaseModel):
@@ -20,6 +23,9 @@ class SettingsResponse(BaseModel):
     sonarr_url: str = ""
     sonarr_api_key_set: bool = False
     path_mappings: list[PathMappingModel] = []
+    ai_provider: str = ""
+    openai_api_key_set: bool = False
+    anthropic_api_key_set: bool = False
 
 
 class TestConnectionRequest(BaseModel):

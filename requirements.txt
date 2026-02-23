@@ -6,3 +6,6 @@ pydantic-settings>=2.1.0
 python-multipart>=0.0.6
 ffsubsync>=0.4.25
 pysubs2>=1.6.1
+openai>=1.0.0
+anthropic>=0.40.0
+langdetect>=1.0.9

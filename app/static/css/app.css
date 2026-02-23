@@ -81,6 +81,14 @@ table tbody tr:hover {
 .track-item label {
     margin-bottom: 0;
     cursor: pointer;
+    flex: 1;
+}
+
+.translate-btn {
+    margin-bottom: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 .pgs-warning {

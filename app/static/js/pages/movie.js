@@ -42,6 +42,12 @@ async function MoviePage(container, movieId) {
                         <option value="sub-to-audio">Sub-to-Audio (fallback)</option>
                     </select>
                 </label>
+                <label>Sync Engine
+                    <select id="sync-engine">
+                        <option value="ffsubsync">ffsubsync</option>
+                        <option value="alass">alass (faster, cross-language)</option>
+                    </select>
+                </label>
                 <label>Output Language Tag
                     <input type="text" id="output-lang" placeholder="e.g. es, pt" value="">
                 </label>
@@ -57,7 +63,12 @@ async function MoviePage(container, movieId) {
     let tracks = [];
     try {
         tracks = await API.get(`/movies/${movieId}/tracks`);
-        renderTracks(document.getElementById("tracks-area"), tracks);
+        renderTracks(document.getElementById("tracks-area"), tracks, movie.file_path, async () => {
+            try {
+                const subs = await API.get(`/movies/${movieId}/external-subs`);
+                renderExternalSubs(document.getElementById("folder-subs-area"), subs);
+            } catch (_) {}
+        });
     } catch (err) {
         document.getElementById("tracks-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
@@ -94,6 +105,7 @@ async function MoviePage(container, movieId) {
         const selectedSub = document.querySelector('input[name="ext-sub"]:checked');
         const uploadedFile = document.getElementById("sub-upload").files[0];
         const syncMode = document.getElementById("sync-mode").value;
+        const syncEngine = document.getElementById("sync-engine").value;
         const outputLang = document.getElementById("output-lang").value;
 
         if (syncMode === "sub-to-sub" && !selectedTrack) {
@@ -112,6 +124,7 @@ async function MoviePage(container, movieId) {
         const formData = new FormData();
         formData.append("video_path", movie.file_path);
         formData.append("sync_mode", syncMode);
+        formData.append("sync_engine", syncEngine);
         formData.append("output_language", outputLang);
 
         if (selectedTrack) {
@@ -145,7 +158,7 @@ async function MoviePage(container, movieId) {
     });
 }
 
-function renderTracks(container, tracks) {
+function renderTracks(container, tracks, videoPath, onTranslated) {
     if (tracks.length === 0) {
         container.innerHTML = "<p>No embedded subtitle tracks found.</p>";
         return;
@@ -176,11 +189,54 @@ function renderTracks(container, tracks) {
                         ${badges.map(b => ` <small>[${b}]</small>`).join("")}
                     </span>
                 </label>
+                ${t.text_based ? `<button type="button" class="translate-btn outline secondary" data-track-index="${t.index}" data-track-lang="${escapeHtml(t.language || "")}">Translate</button>` : ""}
             </div>
         `;
     });
     html += "</div>";
     container.innerHTML = html;
+
+    // Translate button handlers
+    container.querySelectorAll(".translate-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const trackIndex = btn.dataset.trackIndex;
+            const trackLang = btn.dataset.trackLang;
+
+            const targetLang = prompt(`Translate track #${trackIndex} (${trackLang || "unknown"}) to which language?\n\nEnter language code (e.g. es, pt, fr, de):`, "es");
+            if (!targetLang) return;
+
+            btn.setAttribute("aria-busy", "true");
+            btn.disabled = true;
+            btn.textContent = "Translating...";
+
+            const formData = new FormData();
+            formData.append("video_path", videoPath);
+            formData.append("track_index", trackIndex);
+            formData.append("target_language", targetLang.trim());
+            if (trackLang) formData.append("source_language", trackLang);
+
+            try {
+                const result = await API.postForm("/translate", formData);
+                if (result.success) {
+                    btn.textContent = "Done!";
+                    alert(`Translation complete!\n${result.message}\nSaved to: ${result.output_path}`);
+                    if (onTranslated) await onTranslated();
+                } else {
+                    btn.textContent = "Translate";
+                    alert(`Translation failed: ${result.message}`);
+                }
+            } catch (err) {
+                btn.textContent = "Translate";
+                alert(`Translation error: ${err.message}`);
+            } finally {
+                btn.removeAttribute("aria-busy");
+                btn.disabled = false;
+                if (btn.textContent === "Done!") {
+                    setTimeout(() => { btn.textContent = "Translate"; }, 3000);
+                }
+            }
+        });
+    });
 }
 
 function renderExternalSubs(container, subs) {
