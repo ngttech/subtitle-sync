@@ -63,10 +63,11 @@ def _run_alass(reference_path: str, sub_path: str, output_path: str) -> tuple[bo
     return True, "Sync completed successfully (alass)", offset_ms
 
 
-def _build_output_path(video_path: str, language: str, ext: str = ".srt") -> str:
+def _build_output_path(video_path: str, language: str, ext: str = ".srt", tag: str = "") -> str:
     video = Path(video_path)
+    tag_part = f"[{tag}]" if tag else ""
     lang_suffix = f".{language}" if language else ".synced"
-    output_name = f"{video.stem}{lang_suffix}{ext}"
+    output_name = f"{video.stem}{tag_part}{lang_suffix}{ext}"
     return str(video.parent / output_name)
 
 
@@ -84,7 +85,7 @@ async def sync_sub_to_sub(
     sync_engine: str = "ffsubsync",
 ) -> tuple[bool, str, str, float]:
     ext = Path(external_sub_path).suffix or ".srt"
-    output_path = _build_output_path(video_path, output_language, ext)
+    output_path = _build_output_path(video_path, output_language, ext, tag=f"synced-{sync_engine}")
     runner = _get_runner(sync_engine)
     success, message, offset_ms = await asyncio.to_thread(
         runner, reference_sub_path, external_sub_path, output_path
@@ -99,7 +100,7 @@ async def sync_sub_to_audio(
     sync_engine: str = "ffsubsync",
 ) -> tuple[bool, str, str, float]:
     ext = Path(external_sub_path).suffix or ".srt"
-    output_path = _build_output_path(video_path, output_language, ext)
+    output_path = _build_output_path(video_path, output_language, ext, tag=f"synced-{sync_engine}")
     runner = _get_runner(sync_engine)
     success, message, offset_ms = await asyncio.to_thread(
         runner, video_path, external_sub_path, output_path

@@ -64,6 +64,25 @@ async function SettingsPage(container) {
                 <label>Anthropic API Key
                     <input type="password" name="anthropic_api_key" value="" placeholder="${settings.anthropic_api_key_set ? '(saved — leave blank to keep)' : 'Enter Anthropic API key'}">
                 </label>
+                <div class="grid">
+                    <label>OpenAI Model
+                        <select name="openai_model">
+                            <option value="gpt-4o-mini" ${settings.openai_model === 'gpt-4o-mini' ? 'selected' : ''}>gpt-4o-mini</option>
+                            <option value="gpt-4o" ${settings.openai_model === 'gpt-4o' ? 'selected' : ''}>gpt-4o</option>
+                            <option value="gpt-5-mini" ${settings.openai_model === 'gpt-5-mini' ? 'selected' : ''}>gpt-5-mini</option>
+                            <option value="gpt-5" ${settings.openai_model === 'gpt-5' ? 'selected' : ''}>gpt-5</option>
+                        </select>
+                    </label>
+                    <label>Anthropic Model
+                        <select name="anthropic_model">
+                            <option value="claude-haiku-4-5-20251001" ${settings.anthropic_model === 'claude-haiku-4-5-20251001' ? 'selected' : ''}>claude-haiku-4-5-20251001</option>
+                            <option value="claude-sonnet-4-5-20250929" ${settings.anthropic_model === 'claude-sonnet-4-5-20250929' ? 'selected' : ''}>claude-sonnet-4-5-20250929</option>
+                        </select>
+                    </label>
+                </div>
+                <label>Default Language
+                    <input type="text" name="default_language" value="${escapeHtml(settings.default_language || '')}" placeholder="e.g. es, pt, fr (pre-fills language fields)">
+                </label>
             </article>
 
             <article>
@@ -150,7 +169,7 @@ async function SettingsPage(container) {
         });
 
         try {
-            await API.put("/settings", {
+            const result = await API.put("/settings", {
                 radarr_url: form.radarr_url.value,
                 radarr_api_key: form.radarr_api_key.value,
                 sonarr_url: form.sonarr_url.value,
@@ -159,7 +178,11 @@ async function SettingsPage(container) {
                 ai_provider: form.ai_provider.value,
                 openai_api_key: form.openai_api_key.value,
                 anthropic_api_key: form.anthropic_api_key.value,
+                openai_model: form.openai_model.value,
+                anthropic_model: form.anthropic_model.value,
+                default_language: form.default_language.value,
             });
+            window._appDefaults.default_language = result.default_language || "";
             el.textContent = "Settings saved!";
         } catch (err) {
             el.textContent = "Error: " + err.message;

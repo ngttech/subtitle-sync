@@ -179,3 +179,51 @@ table tbody tr:hover {
 .hidden {
     display: none !important;
 }
+
+/* Inline translate UI */
+.track-item {
+    flex-wrap: wrap;
+}
+
+.translate-ui {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.translate-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.translate-controls input {
+    margin-bottom: 0;
+    width: 10rem;
+}
+
+.translate-controls button {
+    margin-bottom: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.translate-progress {
+    margin-top: 0.5rem;
+}
+
+.translate-progress progress {
+    width: 100%;
+    margin-bottom: 0.25rem;
+}
+
+.translate-result {
+    margin-top: 0.25rem;
+}
+
+.translate-result .sync-result {
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+}

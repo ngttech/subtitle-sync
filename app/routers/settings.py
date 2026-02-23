@@ -30,6 +30,9 @@ async def get_settings():
         ai_provider=s.ai_provider,
         openai_api_key_set=bool(s.openai_api_key),
         anthropic_api_key_set=bool(s.anthropic_api_key),
+        openai_model=s.openai_model,
+        anthropic_model=s.anthropic_model,
+        default_language=s.default_language,
     )
 
 
@@ -54,6 +57,9 @@ async def update_settings(req: SettingsRequest):
         ai_provider=req.ai_provider,
         openai_api_key=openai_key,
         anthropic_api_key=anthropic_key,
+        openai_model=req.openai_model,
+        anthropic_model=req.anthropic_model,
+        default_language=req.default_language,
     )
     save_settings(new_settings)
 
@@ -72,6 +78,9 @@ async def update_settings(req: SettingsRequest):
         ai_provider=new_settings.ai_provider,
         openai_api_key_set=bool(new_settings.openai_api_key),
         anthropic_api_key_set=bool(new_settings.anthropic_api_key),
+        openai_model=new_settings.openai_model,
+        anthropic_model=new_settings.anthropic_model,
+        default_language=new_settings.default_language,
     )
 
 

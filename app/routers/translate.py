@@ -1,14 +1,14 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException
+from fastapi.responses import StreamingResponse
 
-from app.models.subtitle import TranslateResponse
-from app.services.translate import translate_subtitle
+from app.services.translate import translate_subtitle_stream
 
 router = APIRouter(tags=["translate"])
 
 
-@router.post("/translate", response_model=TranslateResponse)
+@router.post("/translate")
 async def translate_track(
     video_path: str = Form(...),
     track_index: int = Form(...),
@@ -18,10 +18,10 @@ async def translate_track(
     if not Path(video_path).exists():
         raise HTTPException(status_code=400, detail=f"Video file not found: {video_path}")
 
-    try:
-        success, message, output_path = await translate_subtitle(
+    async def event_stream():
+        async for event_json in translate_subtitle_stream(
             video_path, track_index, target_language, source_language,
-        )
-        return TranslateResponse(success=success, message=message, output_path=output_path)
-    except Exception as e:
-        return TranslateResponse(success=False, message=str(e)[:500])
+        ):
+            yield f"data: {event_json}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

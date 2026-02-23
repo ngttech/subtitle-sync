@@ -61,5 +61,5 @@ async def get_episode_external_subs(episode_id: int):
     if not episode.file_path:
         raise HTTPException(status_code=404, detail="No file for this episode")
     from pathlib import Path
-    folder = str(Path(episode.file_path).parent)
-    return scan_external_subs(folder)
+    video_path = Path(episode.file_path)
+    return scan_external_subs(str(video_path.parent), video_stem=video_path.stem)

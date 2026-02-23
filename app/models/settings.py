@@ -15,6 +15,9 @@ class SettingsRequest(BaseModel):
     ai_provider: str = ""
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    openai_model: str = "gpt-5-mini"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+    default_language: str = ""
 
 
 class SettingsResponse(BaseModel):
@@ -26,6 +29,9 @@ class SettingsResponse(BaseModel):
     ai_provider: str = ""
     openai_api_key_set: bool = False
     anthropic_api_key_set: bool = False
+    openai_model: str = "gpt-5-mini"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
+    default_language: str = ""
 
 
 class TestConnectionRequest(BaseModel):

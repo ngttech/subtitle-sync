@@ -13,6 +13,7 @@ async function EpisodePage(container, episodeId) {
     }
 
     const epLabel = `S${String(episode.season_number).padStart(2, "0")}E${String(episode.episode_number).padStart(2, "0")}`;
+    const defaultLang = window._appDefaults?.default_language || "";
 
     container.innerHTML = `
         <h2>${escapeHtml(episode.series_title)} — ${epLabel}: ${escapeHtml(episode.title)}</h2>
@@ -51,7 +52,7 @@ async function EpisodePage(container, episodeId) {
                     </select>
                 </label>
                 <label>Output Language Tag
-                    <input type="text" id="output-lang" placeholder="e.g. es, pt" value="">
+                    <input type="text" id="output-lang" placeholder="e.g. es, pt" value="${escapeHtml(defaultLang)}">
                 </label>
             </div>
             <button type="button" id="sync-btn">Sync Subtitles</button>
@@ -62,26 +63,30 @@ async function EpisodePage(container, episodeId) {
     `;
 
     // Load tracks
-    let tracks = [];
+    const tracksArea = document.getElementById("tracks-area");
     try {
-        tracks = await API.get(`/episodes/${episodeId}/tracks`);
-        renderTracks(document.getElementById("tracks-area"), tracks, episode.file_path, async () => {
+        const tracks = await API.get(`/episodes/${episodeId}/tracks`);
+        tracksArea.removeAttribute("aria-busy");
+        renderTracks(tracksArea, tracks, episode.file_path, async () => {
             try {
                 const subs = await API.get(`/episodes/${episodeId}/external-subs`);
                 renderExternalSubs(document.getElementById("folder-subs-area"), subs);
             } catch (_) {}
         });
     } catch (err) {
-        document.getElementById("tracks-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
+        tracksArea.removeAttribute("aria-busy");
+        tracksArea.innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
 
     // Load external subs
-    let externalSubs = [];
+    const folderSubsArea = document.getElementById("folder-subs-area");
     try {
-        externalSubs = await API.get(`/episodes/${episodeId}/external-subs`);
-        renderExternalSubs(document.getElementById("folder-subs-area"), externalSubs);
+        const externalSubs = await API.get(`/episodes/${episodeId}/external-subs`);
+        folderSubsArea.removeAttribute("aria-busy");
+        renderExternalSubs(folderSubsArea, externalSubs);
     } catch (err) {
-        document.getElementById("folder-subs-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
+        folderSubsArea.removeAttribute("aria-busy");
+        folderSubsArea.innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
 
     // Tab switching

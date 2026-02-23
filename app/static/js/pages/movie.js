@@ -12,6 +12,8 @@ async function MoviePage(container, movieId) {
         return;
     }
 
+    const defaultLang = window._appDefaults?.default_language || "";
+
     container.innerHTML = `
         <h2>${escapeHtml(movie.title)} <small>(${movie.year || ""})</small></h2>
         <p class="file-path">${escapeHtml(movie.file_path)}</p>
@@ -49,7 +51,7 @@ async function MoviePage(container, movieId) {
                     </select>
                 </label>
                 <label>Output Language Tag
-                    <input type="text" id="output-lang" placeholder="e.g. es, pt" value="">
+                    <input type="text" id="output-lang" placeholder="e.g. es, pt" value="${escapeHtml(defaultLang)}">
                 </label>
             </div>
             <button type="button" id="sync-btn">Sync Subtitles</button>
@@ -60,26 +62,30 @@ async function MoviePage(container, movieId) {
     `;
 
     // Load tracks
-    let tracks = [];
+    const tracksArea = document.getElementById("tracks-area");
     try {
-        tracks = await API.get(`/movies/${movieId}/tracks`);
-        renderTracks(document.getElementById("tracks-area"), tracks, movie.file_path, async () => {
+        const tracks = await API.get(`/movies/${movieId}/tracks`);
+        tracksArea.removeAttribute("aria-busy");
+        renderTracks(tracksArea, tracks, movie.file_path, async () => {
             try {
                 const subs = await API.get(`/movies/${movieId}/external-subs`);
                 renderExternalSubs(document.getElementById("folder-subs-area"), subs);
             } catch (_) {}
         });
     } catch (err) {
-        document.getElementById("tracks-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
+        tracksArea.removeAttribute("aria-busy");
+        tracksArea.innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
 
     // Load external subs
-    let externalSubs = [];
+    const folderSubsArea = document.getElementById("folder-subs-area");
     try {
-        externalSubs = await API.get(`/movies/${movieId}/external-subs`);
-        renderExternalSubs(document.getElementById("folder-subs-area"), externalSubs);
+        const externalSubs = await API.get(`/movies/${movieId}/external-subs`);
+        folderSubsArea.removeAttribute("aria-busy");
+        renderExternalSubs(folderSubsArea, externalSubs);
     } catch (err) {
-        document.getElementById("folder-subs-area").innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
+        folderSubsArea.removeAttribute("aria-busy");
+        folderSubsArea.innerHTML = `<p>Error: ${escapeHtml(err.message)}</p>`;
     }
 
     // Tab switching
@@ -196,45 +202,97 @@ function renderTracks(container, tracks, videoPath, onTranslated) {
     html += "</div>";
     container.innerHTML = html;
 
-    // Translate button handlers
+    // Translate button handlers — inline UI
     container.querySelectorAll(".translate-btn").forEach(btn => {
-        btn.addEventListener("click", async () => {
+        btn.addEventListener("click", () => {
+            const trackItem = btn.closest(".track-item");
             const trackIndex = btn.dataset.trackIndex;
             const trackLang = btn.dataset.trackLang;
 
-            const targetLang = prompt(`Translate track #${trackIndex} (${trackLang || "unknown"}) to which language?\n\nEnter language code (e.g. es, pt, fr, de):`, "es");
-            if (!targetLang) return;
-
-            btn.setAttribute("aria-busy", "true");
-            btn.disabled = true;
-            btn.textContent = "Translating...";
-
-            const formData = new FormData();
-            formData.append("video_path", videoPath);
-            formData.append("track_index", trackIndex);
-            formData.append("target_language", targetLang.trim());
-            if (trackLang) formData.append("source_language", trackLang);
-
-            try {
-                const result = await API.postForm("/translate", formData);
-                if (result.success) {
-                    btn.textContent = "Done!";
-                    alert(`Translation complete!\n${result.message}\nSaved to: ${result.output_path}`);
-                    if (onTranslated) await onTranslated();
-                } else {
-                    btn.textContent = "Translate";
-                    alert(`Translation failed: ${result.message}`);
-                }
-            } catch (err) {
-                btn.textContent = "Translate";
-                alert(`Translation error: ${err.message}`);
-            } finally {
-                btn.removeAttribute("aria-busy");
-                btn.disabled = false;
-                if (btn.textContent === "Done!") {
-                    setTimeout(() => { btn.textContent = "Translate"; }, 3000);
-                }
+            // Toggle: if translate UI already open for this track, close it
+            const existing = trackItem.querySelector(".translate-ui");
+            if (existing) {
+                existing.remove();
+                return;
             }
+
+            // Close any other open translate UIs
+            container.querySelectorAll(".translate-ui").forEach(el => el.remove());
+
+            const defaultLang = window._appDefaults?.default_language || "";
+            const translateUI = document.createElement("div");
+            translateUI.className = "translate-ui";
+            translateUI.innerHTML = `
+                <div class="translate-controls">
+                    <input type="text" class="translate-lang-input" value="${escapeHtml(defaultLang)}" placeholder="Target language (e.g. es, pt)">
+                    <button type="button" class="translate-go-btn">Go</button>
+                    <button type="button" class="translate-cancel-btn outline secondary">Cancel</button>
+                </div>
+                <div class="translate-progress hidden">
+                    <progress class="translate-progress-bar" value="0" max="100"></progress>
+                    <small class="translate-status"></small>
+                </div>
+                <div class="translate-result"></div>
+            `;
+            trackItem.appendChild(translateUI);
+
+            const langInput = translateUI.querySelector(".translate-lang-input");
+            const goBtn = translateUI.querySelector(".translate-go-btn");
+            const cancelBtn = translateUI.querySelector(".translate-cancel-btn");
+            const progressDiv = translateUI.querySelector(".translate-progress");
+            const progressBar = translateUI.querySelector(".translate-progress-bar");
+            const statusEl = translateUI.querySelector(".translate-status");
+            const resultDiv = translateUI.querySelector(".translate-result");
+
+            langInput.focus();
+
+            cancelBtn.addEventListener("click", () => translateUI.remove());
+
+            langInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") { e.preventDefault(); goBtn.click(); }
+                if (e.key === "Escape") { translateUI.remove(); }
+            });
+
+            goBtn.addEventListener("click", async () => {
+                const targetLang = langInput.value.trim();
+                if (!targetLang) { langInput.focus(); return; }
+
+                goBtn.disabled = true;
+                langInput.disabled = true;
+                cancelBtn.classList.add("hidden");
+                progressDiv.classList.remove("hidden");
+                resultDiv.innerHTML = "";
+
+                const formData = new FormData();
+                formData.append("video_path", videoPath);
+                formData.append("track_index", trackIndex);
+                formData.append("target_language", targetLang);
+                if (trackLang) formData.append("source_language", trackLang);
+
+                try {
+                    await API.postFormSSE("/translate", formData, (event) => {
+                        if (event.type === "progress") {
+                            progressBar.value = event.percent;
+                            statusEl.textContent = event.message;
+                        } else if (event.type === "complete") {
+                            progressBar.value = 100;
+                            statusEl.textContent = "";
+                            resultDiv.innerHTML = `<div class="sync-result success"><p>${escapeHtml(event.message)}</p><p class="file-path">${escapeHtml(event.output_path)}</p></div>`;
+                        } else if (event.type === "error") {
+                            resultDiv.innerHTML = `<div class="sync-result error"><p>${escapeHtml(event.message)}</p></div>`;
+                        }
+                    });
+                    // Refresh external subs list
+                    if (onTranslated) await onTranslated();
+                } catch (err) {
+                    resultDiv.innerHTML = `<div class="sync-result error"><p>Error: ${escapeHtml(err.message)}</p></div>`;
+                } finally {
+                    goBtn.disabled = false;
+                    langInput.disabled = false;
+                    cancelBtn.classList.remove("hidden");
+                    cancelBtn.textContent = "Close";
+                }
+            });
         });
     });
 }

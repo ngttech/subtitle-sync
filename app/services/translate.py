@@ -1,6 +1,8 @@
 import asyncio
+import json
 import os
 import re
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pysubs2
@@ -9,10 +11,9 @@ from langdetect import detect
 from app.config import load_settings, get_data_dir
 from app.services.extract import extract_subtitle
 
-# Send whole file if ≤500 lines, otherwise chunk at 500 with context overlap
 CHUNK_THRESHOLD = 500
 CHUNK_SIZE = 500
-CONTEXT_OVERLAP = 30  # lines from previous chunk included as context (not re-translated)
+CONTEXT_OVERLAP = 30
 
 SYSTEM_PROMPT = (
     "You are a professional subtitle translator. "
@@ -35,12 +36,6 @@ def _detect_language(lines: list[str]) -> str:
 
 
 def _build_user_message(lines: list[str], offset: int = 0, context_lines: list[str] | None = None) -> str:
-    """Build the numbered user message for the LLM.
-
-    If context_lines is provided, they are prepended as already-translated context
-    so the LLM can maintain narrative consistency, but only the numbered lines
-    after the context should be translated.
-    """
     numbered = "\n".join(f"{i + 1 + offset}|{line}" for i, line in enumerate(lines))
 
     if context_lines:
@@ -63,175 +58,140 @@ def _build_user_message(lines: list[str], offset: int = 0, context_lines: list[s
 
 
 def _estimate_max_tokens(num_lines: int) -> int:
-    """Estimate max_tokens needed for the response. ~30 tokens per subtitle line is generous."""
     return min(max(num_lines * 30, 1024), 16384)
 
 
-async def _translate_with_openai(
-    lines: list[str], source_lang: str, target_lang: str, api_key: str
-) -> list[str]:
-    from openai import AsyncOpenAI
-
-    client = AsyncOpenAI(api_key=api_key)
-    system_content = SYSTEM_PROMPT.format(source_lang=source_lang, target_lang=target_lang)
-
-    if len(lines) <= CHUNK_THRESHOLD:
-        # Send the whole file at once
-        msg = _build_user_message(lines)
+async def _call_llm(provider: str, api_key: str, model: str, system_content: str, user_content: str, max_tokens: int) -> str:
+    if provider == "openai":
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
         resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {"role": "system", "content": system_content},
-                {"role": "user", "content": msg},
+                {"role": "user", "content": user_content},
             ],
-            max_tokens=_estimate_max_tokens(len(lines)),
+            max_tokens=max_tokens,
             temperature=0.3,
         )
-        raw = resp.choices[0].message.content or ""
-        return _parse_numbered_response(raw, len(lines), offset=0)
-
-    # Chunked fallback for long subtitles
-    translated: list[str] = []
-    for start in range(0, len(lines), CHUNK_SIZE):
-        chunk = lines[start : start + CHUNK_SIZE]
-
-        # Include tail of previous translation as context
-        context = translated[-CONTEXT_OVERLAP:] if translated else None
-
-        msg = _build_user_message(chunk, offset=start, context_lines=context)
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": msg},
-            ],
-            max_tokens=_estimate_max_tokens(len(chunk)),
-            temperature=0.3,
-        )
-        raw = resp.choices[0].message.content or ""
-        parsed = _parse_numbered_response(raw, len(chunk), offset=start)
-        translated.extend(parsed)
-
-    return translated
-
-
-async def _translate_with_anthropic(
-    lines: list[str], source_lang: str, target_lang: str, api_key: str
-) -> list[str]:
-    from anthropic import AsyncAnthropic
-
-    client = AsyncAnthropic(api_key=api_key)
-    system_content = SYSTEM_PROMPT.format(source_lang=source_lang, target_lang=target_lang)
-
-    if len(lines) <= CHUNK_THRESHOLD:
-        # Send the whole file at once
-        msg = _build_user_message(lines)
+        return resp.choices[0].message.content or ""
+    else:
+        from anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key)
         resp = await client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=_estimate_max_tokens(len(lines)),
+            model=model,
+            max_tokens=max_tokens,
             system=system_content,
-            messages=[{"role": "user", "content": msg}],
+            messages=[{"role": "user", "content": user_content}],
         )
-        raw = resp.content[0].text if resp.content else ""
-        return _parse_numbered_response(raw, len(lines), offset=0)
-
-    # Chunked fallback for long subtitles
-    translated: list[str] = []
-    for start in range(0, len(lines), CHUNK_SIZE):
-        chunk = lines[start : start + CHUNK_SIZE]
-
-        # Include tail of previous translation as context
-        context = translated[-CONTEXT_OVERLAP:] if translated else None
-
-        msg = _build_user_message(chunk, offset=start, context_lines=context)
-        resp = await client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=_estimate_max_tokens(len(chunk)),
-            system=system_content,
-            messages=[{"role": "user", "content": msg}],
-        )
-        raw = resp.content[0].text if resp.content else ""
-        parsed = _parse_numbered_response(raw, len(chunk), offset=start)
-        translated.extend(parsed)
-
-    return translated
+        return resp.content[0].text if resp.content else ""
 
 
 def _parse_numbered_response(raw: str, expected_count: int, offset: int = 0) -> list[str]:
-    """Parse numbered response lines like '1|translated text'."""
     result: dict[int, str] = {}
     for line in raw.strip().split("\n"):
         m = re.match(r"(\d+)\|(.*)$", line.strip())
         if m:
             idx = int(m.group(1))
             result[idx] = m.group(2)
-
-    # Build ordered list using the expected numbering (offset+1 .. offset+count)
     return [result.get(i + 1 + offset, "") for i in range(expected_count)]
 
 
-async def translate_subtitle(
+def _sse_event(type: str, percent: int, message: str, output_path: str = "") -> str:
+    data = {"type": type, "percent": percent, "message": message}
+    if output_path:
+        data["output_path"] = output_path
+    return json.dumps(data)
+
+
+def _sanitize_model_for_filename(model: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9._-]", "", model)
+
+
+async def translate_subtitle_stream(
     video_path: str,
     track_index: int,
     target_language: str,
     source_language: str = "auto",
-) -> tuple[bool, str, str]:
-    """Extract an embedded track, translate it with AI, save next to the video.
-
-    Returns (success, message, output_path).
-    """
+) -> AsyncGenerator[str, None]:
     settings = load_settings()
 
     if not settings.ai_provider:
-        return False, "No AI provider configured. Set one in Settings.", ""
+        yield _sse_event("error", 0, "No AI provider configured. Set one in Settings.")
+        return
     if settings.ai_provider == "openai" and not settings.openai_api_key:
-        return False, "OpenAI API key not configured.", ""
+        yield _sse_event("error", 0, "OpenAI API key not configured.")
+        return
     if settings.ai_provider == "anthropic" and not settings.anthropic_api_key:
-        return False, "Anthropic API key not configured.", ""
+        yield _sse_event("error", 0, "Anthropic API key not configured.")
+        return
+
+    provider = settings.ai_provider
+    api_key = settings.openai_api_key if provider == "openai" else settings.anthropic_api_key
+    model = settings.openai_model if provider == "openai" else settings.anthropic_model
 
     # 1. Extract embedded track
+    yield _sse_event("progress", 5, "Extracting subtitle track...")
     try:
         temp_srt = await extract_subtitle(video_path, track_index)
     except Exception as e:
-        return False, f"Failed to extract track: {e}", ""
+        yield _sse_event("error", 0, f"Failed to extract track: {e}")
+        return
 
     try:
         # 2. Load with pysubs2
+        yield _sse_event("progress", 15, "Loading subtitle file...")
         subs = await asyncio.to_thread(pysubs2.load, temp_srt)
 
         # 3. Get plain text lines
         lines = [event.plaintext for event in subs]
 
         # 4. Detect source language
+        yield _sse_event("progress", 20, "Detecting source language...")
         src_lang = source_language
         if src_lang == "auto":
             src_lang = _detect_language(lines)
 
-        # 5. Translate (whole file or chunked for long subs)
-        if settings.ai_provider == "openai":
-            translated = await _translate_with_openai(
-                lines, src_lang, target_language, settings.openai_api_key
-            )
-        else:
-            translated = await _translate_with_anthropic(
-                lines, src_lang, target_language, settings.anthropic_api_key
-            )
+        system_content = SYSTEM_PROMPT.format(source_lang=src_lang, target_lang=target_language)
 
-        # 6. Apply translations back to subtitle events
+        # 5. Translate
+        if len(lines) <= CHUNK_THRESHOLD:
+            yield _sse_event("progress", 30, f"Translating {len(lines)} lines...")
+            msg = _build_user_message(lines)
+            raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(lines)))
+            translated = _parse_numbered_response(raw, len(lines), offset=0)
+        else:
+            translated: list[str] = []
+            chunks = list(range(0, len(lines), CHUNK_SIZE))
+            total_chunks = len(chunks)
+            for chunk_idx, start in enumerate(chunks):
+                chunk = lines[start : start + CHUNK_SIZE]
+                context = translated[-CONTEXT_OVERLAP:] if translated else None
+
+                progress = 20 + int(70 * (chunk_idx / total_chunks))
+                yield _sse_event("progress", progress, f"Translating chunk {chunk_idx + 1} of {total_chunks}...")
+
+                msg = _build_user_message(chunk, offset=start, context_lines=context)
+                raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(chunk)))
+                parsed = _parse_numbered_response(raw, len(chunk), offset=start)
+                translated.extend(parsed)
+
+        # 6. Apply translations
+        yield _sse_event("progress", 90, "Saving translated file...")
         for i, event in enumerate(subs):
             if i < len(translated) and translated[i]:
                 event.text = translated[i]
 
-        # 7. Save output
+        # 7. Save output with [ai-model] tag
         video = Path(video_path)
-        output_path = str(video.parent / f"{video.stem}.{target_language}.srt")
+        model_tag = _sanitize_model_for_filename(model)
+        output_path = str(video.parent / f"{video.stem}[ai-{model_tag}].{target_language}.srt")
         await asyncio.to_thread(subs.save, output_path, format_="srt")
 
-        return True, f"Translated {len(lines)} lines ({src_lang} -> {target_language})", output_path
+        yield _sse_event("complete", 100, f"Translated {len(lines)} lines ({src_lang} -> {target_language})", output_path)
 
     except Exception as e:
-        return False, f"Translation failed: {e}", ""
+        yield _sse_event("error", 0, f"Translation failed: {e}")
     finally:
-        # Clean up temp extracted file
         if os.path.exists(temp_srt):
             os.remove(temp_srt)

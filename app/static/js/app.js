@@ -48,5 +48,10 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+window._appDefaults = { default_language: "" };
+API.get("/settings").then(s => {
+    window._appDefaults.default_language = s.default_language || "";
+}).catch(() => {});
+
 window.addEventListener("hashchange", navigate);
 window.addEventListener("DOMContentLoaded", navigate);
