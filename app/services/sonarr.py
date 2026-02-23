@@ -53,7 +53,7 @@ class SonarrClient:
         if series_id in self._episode_cache and (time.time() - self._episode_cache_time.get(series_id, 0)) < self.CACHE_TTL:
             return self._episode_cache[series_id]
         async with self._client() as client:
-            resp = await client.get("/episode", params={"seriesId": series_id})
+            resp = await client.get("/episode", params={"seriesId": series_id, "includeEpisodeFile": "true"})
             resp.raise_for_status()
             episodes = resp.json()
             self._episode_cache[series_id] = episodes
@@ -129,7 +129,7 @@ class SonarrClient:
         # Fallback: fetch directly from Sonarr API
         try:
             async with self._client() as client:
-                resp = await client.get(f"/episode/{episode_id}")
+                resp = await client.get(f"/episode/{episode_id}", params={"includeEpisodeFile": "true"})
                 resp.raise_for_status()
                 ep = resp.json()
                 series = await self.get_series_by_id(ep.get("seriesId", 0))
