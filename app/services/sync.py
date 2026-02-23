@@ -16,6 +16,7 @@ def _run_ffsubsync(reference_path: str, sub_path: str, output_path: str) -> tupl
         reference_path,
         "-i", sub_path,
         "-o", output_path,
+        "--gss",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     output = result.stdout + "\n" + result.stderr
