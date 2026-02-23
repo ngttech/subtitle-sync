@@ -95,6 +95,10 @@ app/
 - `ai_provider`: "openai", "anthropic", or "" (disabled)
 - `openai_api_key` / `anthropic_api_key`: stored in settings.json, never returned to frontend
 - Frontend shows `_key_set` booleans, same pattern as Radarr/Sonarr keys
+- `translation_prompt`: custom system prompt for AI translation (plain text, not a secret)
+  - Supports `{source_lang}` and `{target_lang}` placeholders filled at translation time
+  - When empty, falls back to `DEFAULT_SYSTEM_PROMPT` in `app/services/translate.py`
+  - Editable via textarea on Settings page (AI Translation section)
 
 ## Environment Variables
 - `SUBTITLE_SYNC_CONFIG_DIR` — directory for settings.json (default: `./config`)

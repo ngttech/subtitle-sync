@@ -21,6 +21,7 @@ class Settings(BaseModel):
     openai_model: str = "gpt-5-mini"
     anthropic_model: str = "claude-haiku-4-5-20251001"
     default_language: str = ""
+    translation_prompt: str = ""
 
     def apply_path_mapping(self, path: str) -> str:
         for mapping in self.path_mappings:

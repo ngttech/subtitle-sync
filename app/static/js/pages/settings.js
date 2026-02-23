@@ -83,6 +83,10 @@ async function SettingsPage(container) {
                 <label>Default Language
                     <input type="text" name="default_language" value="${escapeHtml(settings.default_language || '')}" placeholder="e.g. es, pt, fr (pre-fills language fields)">
                 </label>
+                <label>Translation Prompt
+                    <textarea name="translation_prompt" rows="4" placeholder="You are a professional subtitle translator. Translate the following subtitle lines from {source_lang} to {target_lang}. You MUST output every line in {target_lang}. Return EXACTLY the same number of lines, one translation per line. Do NOT add line numbers, timestamps, or any extra text. Keep markup tags like <i>, </i>, <b>, </b> intact. Preserve empty lines as empty lines.">${escapeHtml(settings.translation_prompt || '')}</textarea>
+                </label>
+                <small>Use <code>{source_lang}</code> and <code>{target_lang}</code> as placeholders. Leave empty to use the default prompt.</small>
             </article>
 
             <article>
@@ -181,6 +185,7 @@ async function SettingsPage(container) {
                 openai_model: form.openai_model.value,
                 anthropic_model: form.anthropic_model.value,
                 default_language: form.default_language.value,
+                translation_prompt: form.translation_prompt.value,
             });
             window._appDefaults.default_language = result.default_language || "";
             el.textContent = "Settings saved!";

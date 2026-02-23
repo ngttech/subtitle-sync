@@ -15,9 +15,28 @@ CHUNK_THRESHOLD = 500
 CHUNK_SIZE = 500
 CONTEXT_OVERLAP = 30
 
-SYSTEM_PROMPT = (
+LANGUAGE_NAMES = {
+    "en": "English", "es": "Spanish", "fr": "French", "de": "German",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "ru": "Russian",
+    "ja": "Japanese", "ko": "Korean", "zh": "Chinese", "zh-cn": "Chinese (Simplified)",
+    "zh-tw": "Chinese (Traditional)", "ar": "Arabic", "hi": "Hindi", "tr": "Turkish",
+    "pl": "Polish", "sv": "Swedish", "da": "Danish", "no": "Norwegian",
+    "fi": "Finnish", "cs": "Czech", "ro": "Romanian", "hu": "Hungarian",
+    "el": "Greek", "he": "Hebrew", "th": "Thai", "vi": "Vietnamese",
+    "id": "Indonesian", "ms": "Malay", "uk": "Ukrainian", "bg": "Bulgarian",
+    "hr": "Croatian", "sk": "Slovak", "sl": "Slovenian", "sr": "Serbian",
+    "ca": "Catalan", "af": "Afrikaans", "sw": "Swahili", "tl": "Filipino",
+}
+
+
+def _lang_name(code: str) -> str:
+    return LANGUAGE_NAMES.get(code.lower(), code)
+
+
+DEFAULT_SYSTEM_PROMPT = (
     "You are a professional subtitle translator. "
     "Translate the following subtitle lines from {source_lang} to {target_lang}. "
+    "You MUST output every line in {target_lang}. "
     "Return EXACTLY the same number of lines, one translation per line. "
     "Do NOT add line numbers, timestamps, or any extra text. "
     "Keep markup tags like <i>, </i>, <b>, </b> intact. "
@@ -35,7 +54,7 @@ def _detect_language(lines: list[str]) -> str:
         return "unknown"
 
 
-def _build_user_message(lines: list[str], offset: int = 0, context_lines: list[str] | None = None) -> str:
+def _build_user_message(lines: list[str], target_lang: str, offset: int = 0, context_lines: list[str] | None = None) -> str:
     numbered = "\n".join(f"{i + 1 + offset}|{line}" for i, line in enumerate(lines))
 
     if context_lines:
@@ -43,16 +62,16 @@ def _build_user_message(lines: list[str], offset: int = 0, context_lines: list[s
         return (
             f"Here is context from the previously translated lines (DO NOT translate these again):\n"
             f"{context_block}\n\n"
-            f"Now translate these {len(lines)} subtitle lines. "
+            f"Now translate these {len(lines)} subtitle lines into {target_lang}. "
             f"Each line is prefixed with 'NUMBER|'. "
-            f"Return only the translated text for each line, one per line, "
+            f"Return only the translated text in {target_lang} for each line, one per line, "
             f"prefixed with the same number and pipe.\n\n{numbered}"
         )
 
     return (
-        f"Translate these {len(lines)} subtitle lines. "
+        f"Translate these {len(lines)} subtitle lines into {target_lang}. "
         f"Each line is prefixed with 'NUMBER|'. "
-        f"Return only the translated text for each line, one per line, "
+        f"Return only the translated text in {target_lang} for each line, one per line, "
         f"prefixed with the same number and pipe.\n\n{numbered}"
     )
 
@@ -155,12 +174,16 @@ async def translate_subtitle_stream(
         if src_lang == "auto":
             src_lang = _detect_language(lines)
 
-        system_content = SYSTEM_PROMPT.format(source_lang=src_lang, target_lang=target_language)
+        prompt_template = settings.translation_prompt.strip() if settings.translation_prompt and settings.translation_prompt.strip() else DEFAULT_SYSTEM_PROMPT
+        system_content = prompt_template.format(
+            source_lang=_lang_name(src_lang),
+            target_lang=_lang_name(target_language),
+        )
 
         # 5. Translate
         if len(lines) <= CHUNK_THRESHOLD:
             yield _sse_event("progress", 30, f"Translating {len(lines)} lines...")
-            msg = _build_user_message(lines)
+            msg = _build_user_message(lines, _lang_name(target_language))
             raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(lines)))
             translated = _parse_numbered_response(raw, len(lines), offset=0)
         else:
@@ -174,7 +197,7 @@ async def translate_subtitle_stream(
                 progress = 20 + int(70 * (chunk_idx / total_chunks))
                 yield _sse_event("progress", progress, f"Translating chunk {chunk_idx + 1} of {total_chunks}...")
 
-                msg = _build_user_message(chunk, offset=start, context_lines=context)
+                msg = _build_user_message(chunk, _lang_name(target_language), offset=start, context_lines=context)
                 raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(chunk)))
                 parsed = _parse_numbered_response(raw, len(chunk), offset=start)
                 translated.extend(parsed)

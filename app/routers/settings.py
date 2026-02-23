@@ -33,6 +33,7 @@ async def get_settings():
         openai_model=s.openai_model,
         anthropic_model=s.anthropic_model,
         default_language=s.default_language,
+        translation_prompt=s.translation_prompt,
     )
 
 
@@ -60,6 +61,7 @@ async def update_settings(req: SettingsRequest):
         openai_model=req.openai_model,
         anthropic_model=req.anthropic_model,
         default_language=req.default_language,
+        translation_prompt=req.translation_prompt,
     )
     save_settings(new_settings)
 
@@ -81,6 +83,7 @@ async def update_settings(req: SettingsRequest):
         openai_model=new_settings.openai_model,
         anthropic_model=new_settings.anthropic_model,
         default_language=new_settings.default_language,
+        translation_prompt=new_settings.translation_prompt,
     )
 
 
