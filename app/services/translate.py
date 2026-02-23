@@ -71,7 +71,7 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content},
             ],
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
             temperature=0.3,
         )
         return resp.choices[0].message.content or ""
