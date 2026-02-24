@@ -98,6 +98,24 @@ async function SettingsPage(container) {
             <button type="submit">Save Settings</button>
             <small id="save-result"></small>
         </form>
+
+        <article id="logs-section">
+            <header><strong>Action Logs</strong></header>
+            <p><small>Recent app activity — translation calls, syncs, settings changes. Download to share for debugging.</small></p>
+            <div style="display:flex;gap:.5rem;margin-bottom:1rem;align-items:center">
+                <button type="button" id="download-logs" class="outline">Download Logs</button>
+                <button type="button" id="clear-logs" class="outline secondary">Clear Logs</button>
+                <small id="logs-result"></small>
+            </div>
+            <div id="logs-table-container" style="max-height:400px;overflow-y:auto">
+                <table class="log-table" role="grid">
+                    <thead><tr>
+                        <th>Time</th><th>Action</th><th>Details</th>
+                    </tr></thead>
+                    <tbody id="logs-body"></tbody>
+                </table>
+            </div>
+        </article>
     `;
 
     let mappingCount = mappings.length;
@@ -191,6 +209,73 @@ async function SettingsPage(container) {
             el.textContent = "Settings saved!";
         } catch (err) {
             el.textContent = "Error: " + err.message;
+        }
+    });
+
+    // --- Action Logs ---
+    function formatLogTime(iso) {
+        try {
+            const d = new Date(iso);
+            return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        } catch { return iso; }
+    }
+
+    function logBadgeClass(entry) {
+        const action = entry.action;
+        if (action === "translation_error" || (action === "sync" && !entry.success) || (action === "test_connection" && !entry.success)) return "log-badge error";
+        if (entry.finish_reason === "length") return "log-badge warning";
+        return "log-badge success";
+    }
+
+    function formatLogDetails(e) {
+        switch (e.action) {
+            case "llm_call":
+                return `${e.model || "?"} | chunk ${e.chunk || "?"} | ${e.lines_in_chunk || 0} lines | finish: ${e.finish_reason || "?"} | tokens: ${e.completion_tokens ?? "?"}${e.reasoning_tokens ? ` (reasoning: ${e.reasoning_tokens})` : ""} | ${e.duration_seconds ?? "?"}s`;
+            case "sync":
+                return `${e.sync_engine || "?"} | ${e.sync_mode || "?"} | ${e.success ? "success" : "failed"} | offset: ${e.offset_ms ?? "?"}ms | ${e.duration_seconds ?? "?"}s`;
+            case "translation_complete":
+                return `${e.model || "?"} | ${e.source_language || "?"}→${e.target_language || "?"} | ${e.applied_lines ?? "?"}/${e.total_lines ?? "?"} lines applied | ${e.total_duration_seconds ?? "?"}s`;
+            case "translation_error":
+                return `${e.model || "?"} | ${e.target_language || "?"} | ${e.error || "unknown error"}`;
+            case "settings_saved":
+                return "Settings updated";
+            case "test_connection":
+                return `${e.service || "?"} | ${e.url || "?"} | ${e.message || ""}`;
+            case "cache_refresh":
+                return "Library cache cleared";
+            default:
+                return JSON.stringify(e).substring(0, 120);
+        }
+    }
+
+    function renderLogRows(entries) {
+        const tbody = document.getElementById("logs-body");
+        if (!entries.length) {
+            tbody.innerHTML = '<tr><td colspan="3"><em>No log entries yet.</em></td></tr>';
+            return;
+        }
+        tbody.innerHTML = entries.map(e => `<tr>
+            <td class="log-time">${escapeHtml(formatLogTime(e.timestamp))}</td>
+            <td><span class="${logBadgeClass(e)}">${escapeHtml(e.action)}</span></td>
+            <td class="log-details">${escapeHtml(formatLogDetails(e))}</td>
+        </tr>`).join("");
+    }
+
+    // Load logs on page render
+    API.get("/logs").then(data => renderLogRows(data.entries || [])).catch(() => {});
+
+    document.getElementById("download-logs").addEventListener("click", () => {
+        window.location = "/api/logs/download";
+    });
+
+    document.getElementById("clear-logs").addEventListener("click", async () => {
+        const el = document.getElementById("logs-result");
+        try {
+            await API.post("/logs/clear", {});
+            renderLogRows([]);
+            el.textContent = "Logs cleared.";
+        } catch (err) {
+            el.textContent = err.message;
         }
     });
 }

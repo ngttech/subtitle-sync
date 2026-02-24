@@ -227,3 +227,49 @@ table tbody tr:hover {
     padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
 }
+
+/* Action Logs table */
+.log-table {
+    font-size: 0.85rem;
+}
+
+.log-table th {
+    position: sticky;
+    top: 0;
+    background: var(--pico-card-background-color);
+    z-index: 1;
+}
+
+.log-time {
+    white-space: nowrap;
+}
+
+.log-details {
+    font-family: monospace;
+    font-size: 0.8rem;
+    word-break: break-word;
+}
+
+.log-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.log-badge.success {
+    background: #2d6a4f;
+    color: #d8f3dc;
+}
+
+.log-badge.warning {
+    background: #7f5539;
+    color: #fefae0;
+}
+
+.log-badge.error {
+    background: #9d0208;
+    color: #ffd6d6;
+}

@@ -2,14 +2,17 @@ import asyncio
 import json
 import os
 import re
+import time
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import NamedTuple
 
 import pysubs2
 from langdetect import detect
 
 from app.config import load_settings, get_data_dir
 from app.services.extract import extract_subtitle
+from app.services.logs import log_action
 
 CHUNK_THRESHOLD = 500
 CHUNK_SIZE = 500
@@ -83,7 +86,14 @@ def _estimate_max_tokens(num_lines: int) -> int:
     return min(max(num_lines * 30, 1024), 16384)
 
 
-async def _call_llm(provider: str, api_key: str, model: str, system_content: str, user_content: str, max_tokens: int) -> str:
+class LLMResponse(NamedTuple):
+    text: str
+    finish_reason: str
+    completion_tokens: int
+    reasoning_tokens: int
+
+
+async def _call_llm(provider: str, api_key: str, model: str, system_content: str, user_content: str, max_tokens: int) -> LLMResponse:
     if provider == "openai":
         from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key)
@@ -99,7 +109,17 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
         if not model.startswith("gpt-5"):
             kwargs["temperature"] = 0.3
         resp = await client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content or ""
+        finish_reason = resp.choices[0].finish_reason or "unknown"
+        completion_tokens = resp.usage.completion_tokens if resp.usage else 0
+        reasoning_tokens = 0
+        if resp.usage and hasattr(resp.usage, "completion_tokens_details") and resp.usage.completion_tokens_details:
+            reasoning_tokens = getattr(resp.usage.completion_tokens_details, "reasoning_tokens", 0) or 0
+        return LLMResponse(
+            text=resp.choices[0].message.content or "",
+            finish_reason=finish_reason,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
+        )
     else:
         from anthropic import AsyncAnthropic
         client = AsyncAnthropic(api_key=api_key)
@@ -109,7 +129,12 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
             system=system_content,
             messages=[{"role": "user", "content": user_content}],
         )
-        return resp.content[0].text if resp.content else ""
+        return LLMResponse(
+            text=resp.content[0].text if resp.content else "",
+            finish_reason=resp.stop_reason or "unknown",
+            completion_tokens=resp.usage.output_tokens if resp.usage else 0,
+            reasoning_tokens=0,
+        )
 
 
 def _parse_numbered_response(raw: str, expected_count: int, offset: int = 0) -> list[str]:
@@ -188,11 +213,29 @@ async def translate_subtitle_stream(
         )
 
         # 5. Translate
+        video_name = Path(video_path).name
+        translation_start = time.time()
+
         if len(lines) <= CHUNK_THRESHOLD:
             yield _sse_event("progress", 30, f"Translating {len(lines)} lines...")
             msg = _build_user_message(lines, _lang_name(target_language))
-            raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(lines)))
-            translated = _parse_numbered_response(raw, len(lines), offset=0)
+            max_tok = _estimate_max_tokens(len(lines))
+            call_start = time.time()
+            llm_resp = await _call_llm(provider, api_key, model, system_content, msg, max_tok)
+            call_duration = round(time.time() - call_start, 1)
+            translated = _parse_numbered_response(llm_resp.text, len(lines), offset=0)
+            log_action("llm_call",
+                video=video_name, provider=provider, model=model,
+                target_language=target_language, source_language=src_lang,
+                chunk="single", lines_in_chunk=len(lines),
+                max_completion_tokens=max_tok,
+                finish_reason=llm_resp.finish_reason,
+                completion_tokens=llm_resp.completion_tokens,
+                reasoning_tokens=llm_resp.reasoning_tokens,
+                output_tokens=llm_resp.completion_tokens - llm_resp.reasoning_tokens,
+                parsed_filled=sum(1 for t in translated if t),
+                duration_seconds=call_duration,
+            )
         else:
             translated: list[str] = []
             chunks = list(range(0, len(lines), CHUNK_SIZE))
@@ -205,15 +248,32 @@ async def translate_subtitle_stream(
                 yield _sse_event("progress", progress, f"Translating chunk {chunk_idx + 1} of {total_chunks}...")
 
                 msg = _build_user_message(chunk, _lang_name(target_language), offset=0, context_lines=context)
-                raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(chunk)))
-                parsed = _parse_numbered_response(raw, len(chunk), offset=0)
+                max_tok = _estimate_max_tokens(len(chunk))
+                call_start = time.time()
+                llm_resp = await _call_llm(provider, api_key, model, system_content, msg, max_tok)
+                call_duration = round(time.time() - call_start, 1)
+                parsed = _parse_numbered_response(llm_resp.text, len(chunk), offset=0)
                 translated.extend(parsed)
+                log_action("llm_call",
+                    video=video_name, provider=provider, model=model,
+                    target_language=target_language, source_language=src_lang,
+                    chunk=f"{chunk_idx + 1}/{total_chunks}", lines_in_chunk=len(chunk),
+                    max_completion_tokens=max_tok,
+                    finish_reason=llm_resp.finish_reason,
+                    completion_tokens=llm_resp.completion_tokens,
+                    reasoning_tokens=llm_resp.reasoning_tokens,
+                    output_tokens=llm_resp.completion_tokens - llm_resp.reasoning_tokens,
+                    parsed_filled=sum(1 for t in parsed if t),
+                    duration_seconds=call_duration,
+                )
 
         # 6. Apply translations
         yield _sse_event("progress", 90, "Saving translated file...")
+        applied = 0
         for i, event in enumerate(subs):
             if i < len(translated) and translated[i]:
                 event.text = translated[i]
+                applied += 1
 
         # 7. Save output with [ai-model] tag
         video = Path(video_path)
@@ -221,9 +281,22 @@ async def translate_subtitle_stream(
         output_path = str(video.parent / f"{video.stem}[ai-{model_tag}].{target_language}.srt")
         await asyncio.to_thread(subs.save, output_path, format_="srt")
 
+        total_duration = round(time.time() - translation_start, 1)
+        log_action("translation_complete",
+            video=video_name, model=model,
+            target_language=target_language, source_language=src_lang,
+            total_lines=len(lines), applied_lines=applied,
+            output_path=output_path, total_duration_seconds=total_duration,
+        )
+
         yield _sse_event("complete", 100, f"Translated {len(lines)} lines ({src_lang} -> {target_language})", output_path)
 
     except Exception as e:
+        log_action("translation_error",
+            video=Path(video_path).name, model=model,
+            target_language=target_language,
+            error=str(e)[:500],
+        )
         yield _sse_event("error", 0, f"Translation failed: {e}")
     finally:
         if os.path.exists(temp_srt):

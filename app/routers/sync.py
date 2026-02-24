@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -6,6 +7,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from app.config import get_data_dir
 from app.models.subtitle import SyncResponse
 from app.services.extract import extract_subtitle
+from app.services.logs import log_action
 from app.services.sync import sync_sub_to_sub, sync_sub_to_audio
 
 router = APIRouter(tags=["sync"])
@@ -45,6 +47,7 @@ async def run_sync(
         raise HTTPException(status_code=400, detail=f"Unknown sync engine: {sync_engine}")
 
     ref_temp_path: str | None = None
+    sync_start = time.time()
 
     try:
         if sync_mode == "sub-to-sub":
@@ -65,6 +68,18 @@ async def run_sync(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown sync mode: {sync_mode}")
 
+        log_action("sync",
+            video=Path(video_path).name,
+            sync_mode=sync_mode,
+            sync_engine=sync_engine,
+            output_language=output_language,
+            success=success,
+            message=message,
+            offset_ms=offset_ms,
+            output_path=output_path,
+            duration_seconds=round(time.time() - sync_start, 1),
+        )
+
         return SyncResponse(
             success=success,
             message=message,
@@ -74,6 +89,14 @@ async def run_sync(
     except HTTPException:
         raise
     except Exception as e:
+        log_action("sync",
+            video=Path(video_path).name,
+            sync_mode=sync_mode,
+            sync_engine=sync_engine,
+            success=False,
+            error=str(e)[:500],
+            duration_seconds=round(time.time() - sync_start, 1),
+        )
         return SyncResponse(success=False, message=str(e)[:500])
     finally:
         # Clean up temp files

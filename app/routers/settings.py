@@ -9,6 +9,7 @@ from app.models.settings import (
     TestConnectionResponse,
     PathMappingModel,
 )
+from app.services.logs import log_action
 from app.services.radarr import radarr_client
 from app.services.sonarr import sonarr_client
 
@@ -64,6 +65,7 @@ async def update_settings(req: SettingsRequest):
         translation_prompt=req.translation_prompt,
     )
     save_settings(new_settings)
+    log_action("settings_saved")
 
     radarr_client.configure(new_settings)
     sonarr_client.configure(new_settings)
@@ -110,26 +112,32 @@ async def test_connection(req: TestConnectionRequest):
             if resp.status_code == 200:
                 data = resp.json()
                 version = data.get("version", "unknown")
-                return TestConnectionResponse(
-                    success=True,
-                    message=f"Connected to {req.service.title()} v{version}",
-                )
+                msg = f"Connected to {req.service.title()} v{version}"
+                log_action("test_connection", service=req.service, url=url, success=True, message=msg)
+                return TestConnectionResponse(success=True, message=msg)
             elif resp.status_code == 401:
+                log_action("test_connection", service=req.service, url=url, success=False, message="Invalid API key")
                 return TestConnectionResponse(success=False, message="Invalid API key")
             else:
-                return TestConnectionResponse(
-                    success=False, message=f"HTTP {resp.status_code}: {resp.text[:200]}"
-                )
+                msg = f"HTTP {resp.status_code}: {resp.text[:200]}"
+                log_action("test_connection", service=req.service, url=url, success=False, message=msg)
+                return TestConnectionResponse(success=False, message=msg)
     except httpx.ConnectError:
-        return TestConnectionResponse(success=False, message=f"Cannot connect to {url}")
+        msg = f"Cannot connect to {url}"
+        log_action("test_connection", service=req.service, url=url, success=False, message=msg)
+        return TestConnectionResponse(success=False, message=msg)
     except httpx.TimeoutException:
+        log_action("test_connection", service=req.service, url=url, success=False, message="Connection timed out")
         return TestConnectionResponse(success=False, message="Connection timed out")
     except Exception as e:
-        return TestConnectionResponse(success=False, message=str(e)[:200])
+        msg = str(e)[:200]
+        log_action("test_connection", service=req.service, url=url, success=False, message=msg)
+        return TestConnectionResponse(success=False, message=msg)
 
 
 @router.post("/cache/refresh")
 async def refresh_cache():
     radarr_client.clear_cache()
     sonarr_client.clear_cache()
+    log_action("cache_refresh")
     return {"message": "Cache cleared"}
