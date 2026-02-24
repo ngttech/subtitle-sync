@@ -204,9 +204,9 @@ async def translate_subtitle_stream(
                 progress = 20 + int(70 * (chunk_idx / total_chunks))
                 yield _sse_event("progress", progress, f"Translating chunk {chunk_idx + 1} of {total_chunks}...")
 
-                msg = _build_user_message(chunk, _lang_name(target_language), offset=start, context_lines=context)
+                msg = _build_user_message(chunk, _lang_name(target_language), offset=0, context_lines=context)
                 raw = await _call_llm(provider, api_key, model, system_content, msg, _estimate_max_tokens(len(chunk)))
-                parsed = _parse_numbered_response(raw, len(chunk), offset=start)
+                parsed = _parse_numbered_response(raw, len(chunk), offset=0)
                 translated.extend(parsed)
 
         # 6. Apply translations
