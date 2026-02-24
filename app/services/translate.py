@@ -82,7 +82,10 @@ def _build_user_message(lines: list[str], target_lang: str, offset: int = 0, con
     )
 
 
-def _estimate_max_tokens(num_lines: int) -> int:
+def _estimate_max_tokens(num_lines: int, model: str = "") -> int:
+    if model.startswith("gpt-5"):
+        # Reasoning models: need headroom for reasoning + output tokens
+        return min(max(num_lines * 60, 4096), 32768)
     return min(max(num_lines * 30, 1024), 16384)
 
 
@@ -106,7 +109,9 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
             max_completion_tokens=max_tokens,
         )
         # GPT-5 family (reasoning models) does not support temperature
-        if not model.startswith("gpt-5"):
+        if model.startswith("gpt-5"):
+            kwargs["reasoning_effort"] = "low"
+        else:
             kwargs["temperature"] = 0.3
         resp = await client.chat.completions.create(**kwargs)
         finish_reason = resp.choices[0].finish_reason or "unknown"
@@ -219,7 +224,7 @@ async def translate_subtitle_stream(
         if len(lines) <= CHUNK_THRESHOLD:
             yield _sse_event("progress", 30, f"Translating {len(lines)} lines...")
             msg = _build_user_message(lines, _lang_name(target_language))
-            max_tok = _estimate_max_tokens(len(lines))
+            max_tok = _estimate_max_tokens(len(lines), model)
             call_start = time.time()
             llm_resp = await _call_llm(provider, api_key, model, system_content, msg, max_tok)
             call_duration = round(time.time() - call_start, 1)
@@ -248,7 +253,7 @@ async def translate_subtitle_stream(
                 yield _sse_event("progress", progress, f"Translating chunk {chunk_idx + 1} of {total_chunks}...")
 
                 msg = _build_user_message(chunk, _lang_name(target_language), offset=0, context_lines=context)
-                max_tok = _estimate_max_tokens(len(chunk))
+                max_tok = _estimate_max_tokens(len(chunk), model)
                 call_start = time.time()
                 llm_resp = await _call_llm(provider, api_key, model, system_content, msg, max_tok)
                 call_duration = round(time.time() - call_start, 1)
