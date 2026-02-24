@@ -40,6 +40,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "Return EXACTLY the same number of lines, one translation per line. "
     "Do NOT add line numbers, timestamps, or any extra text. "
     "Keep markup tags like <i>, </i>, <b>, </b> intact. "
+    "Preserve \\N line break markers exactly as they appear. "
     "Preserve empty lines as empty lines."
 )
 
@@ -64,6 +65,7 @@ def _build_user_message(lines: list[str], target_lang: str, offset: int = 0, con
             f"{context_block}\n\n"
             f"Now translate these {len(lines)} subtitle lines into {target_lang}. "
             f"Each line is prefixed with 'NUMBER|'. "
+            f"\\N within an entry represents a line break — preserve these \\N markers in your output. "
             f"Return only the translated text in {target_lang} for each line, one per line, "
             f"prefixed with the same number and pipe.\n\n{numbered}"
         )
@@ -71,6 +73,7 @@ def _build_user_message(lines: list[str], target_lang: str, offset: int = 0, con
     return (
         f"Translate these {len(lines)} subtitle lines into {target_lang}. "
         f"Each line is prefixed with 'NUMBER|'. "
+        f"\\N within an entry represents a line break — preserve these \\N markers in your output. "
         f"Return only the translated text in {target_lang} for each line, one per line, "
         f"prefixed with the same number and pipe.\n\n{numbered}"
     )
@@ -111,11 +114,15 @@ async def _call_llm(provider: str, api_key: str, model: str, system_content: str
 
 def _parse_numbered_response(raw: str, expected_count: int, offset: int = 0) -> list[str]:
     result: dict[int, str] = {}
+    last_idx = None
     for line in raw.strip().split("\n"):
         m = re.match(r"(\d+)\|(.*)$", line.strip())
         if m:
             idx = int(m.group(1))
             result[idx] = m.group(2)
+            last_idx = idx
+        elif last_idx is not None and line.strip():
+            result[last_idx] += "\\N" + line.strip()
     return [result.get(i + 1 + offset, "") for i in range(expected_count)]
 
 
@@ -166,7 +173,7 @@ async def translate_subtitle_stream(
         subs = await asyncio.to_thread(pysubs2.load, temp_srt)
 
         # 3. Get plain text lines
-        lines = [event.plaintext for event in subs]
+        lines = [event.plaintext.replace("\n", "\\N") for event in subs]
 
         # 4. Detect source language
         yield _sse_event("progress", 20, "Detecting source language...")
